@@ -1,0 +1,50 @@
+name: 更新两融数据与图表
+on:
+  workflow_dispatch:
+  schedule:
+    # UTC 11:30 = 北京时间 19:30；GitHub 定时任务可能延迟
+    - cron: '30 11 * * 1-5'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: margin-pages
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: 抓取、计算、制表并保存运行日志
+        shell: bash
+        run: |
+          mkdir -p data docs
+          set -o pipefail
+          python -u eastmoney_margin_5y_mergechatgpt.py --years 5 --output data/融资融券近五年合并分析.xlsx 2>&1 | tee run.log
+      - name: 生成网页图表
+        run: python build_site.py --input data/融资融券近五年合并分析.xlsx --output docs/index.html
+      - name: 检查产物
+        run: python -m unittest discover -s tests -v
+      - name: 上传本次 Excel 与日志（90 天）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: margin-run-${{ github.run_id }}
+          path: |
+            data/*.xlsx
+            run.log
+          if-no-files-found: warn
+          retention-days: 90
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - uses: actions/deploy-pages@v4
+        id: deployment
