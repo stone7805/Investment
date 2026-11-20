@@ -2,8 +2,9 @@ name: 更新两融数据与图表
 on:
   workflow_dispatch:
   schedule:
-    # UTC 01:05 = 北京时间 09:05；GitHub 定时任务可能延迟
+    # UTC 01:05、01:15 = 北京时间 09:05、09:15
     - cron: '5 1 * * 1-5'
+    - cron: '15 1 * * 1-5'
 permissions:
   contents: read
   pages: write
