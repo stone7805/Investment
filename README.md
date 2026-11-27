@@ -1,47 +1,66 @@
-# 两融观察｜东方财富近五年数据看板
+# 数据观察｜两融、板块估值与巴菲特指标
 
-自动抓取东方财富公开融资融券数据，生成三工作表 Excel，并将趋势图和历史百分位发布到 GitHub Pages。页面采用黑白编辑式排版、色块分区和响应式图表。**这是项目模板；页面需要首次运行成功后才有真实数据。**
+面向 GitHub Pages 的静态数据门户。首页依次进入 **两融观察**、**板块估值**、**巴菲特指标**，并预留行业景气、风险指标和研究工具三个待开发模块。公开页面只展示已校验的数据；不是实时行情终端，也不构成投资建议。
 
-## 页面内容
+## 本次升级要点
 
-- 最新可用交易日：融资余额、沪深300、融资买入额、买入强度和两个历史百分位；每张卡片标注该指标自身的日期。
-- 近 1 / 3 / 5 年切换：融资及两融余额与沪深300、融资买入额与买入强度、平均维持担保比例。
-- 三项近五年百分位：融资买入额占融资余额比例、参与交易投资者占有负债投资者比例、平均维持担保比例。百分位始终按整段五年有效样本计算。
-- 数据说明和原始网页入口；页面非投资建议。
+| 模块 | 页面 | 来源与日期 | 可见内容 |
+| --- | --- | --- | --- |
+| 两融观察 | `docs/margin.html` | 东方财富两路接口；每项指标标注自身最后有效日 | 融资余额、买入强度、沪深300、历史百分位与趋势 |
+| 板块估值 | `docs/valuation.html` | AKShare 中证指数日频接口 `index_hist_csindex` | 预设代码检索、滚动 PE 趋势/分布/样本排名 |
+| 巴菲特指标 | `docs/buffett.html` | AKShare/乐咕乐股 `stock_buffett_index_lg`；一次返回全历史 | A 股总市值/上年度名义 GDP、十年滚动百分位、三张交互图 |
+| 门户 | `docs/index.html` | 指向上述三个独立页面 | 模块入口及三个明确标为“待开发”的位置 |
 
-## 一次性部署到 GitHub
+源程序 `buffett/buffett_indicator_china_original.py` 为用户上传稿，保留作口径参照；门户更新采用 `buffett/fetch.py` 与 `buffett/build.py`，不运行原脚本的 PNG 绘图逻辑。
 
-1. 在 GitHub 新建**公开仓库**，将本目录内所有文件和 `.github/workflows/update.yml` 一起上传到仓库根目录。不要上传账号密码或 `run.log`。
-2. 仓库 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。仓库设置中的 Actions 权限须允许工作流运行、Pages 部署。公开仓库 Pages 一般无需额外费用；私人仓库支持情况以账户方案为准。
-3. 打开 **Actions → 更新两融数据与图表 → Run workflow** 手动运行一次。成功后在该次任务的 `deploy` 步骤及 Settings → Pages 查看网址，通常为 `https://<用户名>.github.io/<仓库名>/`。
-4. 此后工作流按 UTC 周一至周五 11:30（北京时间 19:30）计划运行；GitHub 定时调度可能延迟或因仓库长期不活跃而停用。节假日或收盘后数据未更新时页面可能沿用最近交易日，请以页面日期为准。
-5. 每次运行的 Excel 与 `run.log` 在 Actions 运行记录下方 **Artifacts** 下载，默认保留 90 天。工作流不把数据和日志提交到 Git 仓库。只有抓取、生成及测试都成功后才部署新页面，失败时 Pages 保留上一次成功部署的内容。
+### 巴菲特指标口径
 
-> **重要**：GitHub 的 README.md 不会自动显示交互图表。交互图表在 GitHub Pages 网页中；README 提供使用说明。网页图表通过 ECharts CDN 加载，访问图表需要网络连通 CDN。
+- 比率 = A 股总市值（亿元）÷ 接口返回的**上年度名义 GDP**（亿元）× 100。年度 GDP 是阶段性分母，不是当季 GDP；跨年换值可能出现跳变。
+- 每个日期的十年百分位均以该日向前十个日历年（含首尾）的有效比率为样本，同值使用平均秩；有效样本少于 30 日时显示空白。接口目前只给出“日期、收盘价、总市值、GDP”，**没有原脚本描述的近十年百分位列**，故改为本地明确计算。
+- 接口中同一日期完全重复的记录只计一次，冲突日期、非正 GDP/市值、未来日期或非有限数会报错；源站连续超过 14 天未给出新日期也会暂停此次部署。本地实测 8 条完全相同的重复日期。数据日期和百分位样本数在页面中直接显示；不把页面构建日当数据日。
+- 股票市场与经济总量口径受源站修订影响，百分位只是历史位置，不代表统一的高低估阈值。
+
+## 升级已在用的 GitHub 仓库
+
+**不要上传 ZIP 文件本身。** 先备份你当前仓库的关键文件和可访问的 Pages 地址。在 GitHub 网页上传本项目 ZIP *内部*文件，保持仓库根目录结构；如果 GitHub 上传界面不能保留文件夹，可逐级上传并核对 `.github/workflows/update.yml`、`buffett/`、`valuation/`、`tests/`、`docs/` 路径。请勿覆盖无关文件。
+
+此升级会将原 `docs/index.html` 两融首页换为**门户首页**，原两融页移动到 `docs/margin.html`。新入口是原 Pages 地址，旧首页直达两融的书签需改为 `/margin.html`。保留相同路径 `.github/workflows/update.yml` 作为唯一部署工作流，避免两套工作流竞争。首次上传时包内的 `docs/` 是**本地校验用预览**（来源日期以页面标注为准），请在分享网址前手动运行一次 Actions 并核实部署步骤绿色。
+
+操作步骤：
+
+1. 仓库 `Settings → Pages → Source` 保持 **GitHub Actions**。
+2. 在仓库根目录上传或更新 ZIP 内所有文件和目录；`.github` 是隐藏目录，提交后确认它存在。
+3. `Actions → 更新数据观察门户 → Run workflow` 手动运行，检查“两融抓取”“指数估值抓取”“巴菲特指标抓取”“13 项以上测试”和 `deploy-pages` 均成功，再访问原 Pages 地址。每日凌晨/早盘数据可滞后，以页面最新有效日期为准。
+4. 若单个源站接口不通或限流，本次不会部署不完整门户，线上保留上次成功页面。运行记录中的 **Artifacts** 保存 Excel、估值 JSON、巴菲特 JSON/CSV 和 `run.log`（90 天）。
+
+## 低频顺序请求与限制
+
+工作流默认在**北京时间工作日 09:15**触发一次（UTC `15 1 * * 1-5`）；GitHub 调度不保证准点。为了降低请求密度：两融接口分页串行、页间至少 3 秒；模块之间各等待 20 秒；估值清单按顺序抓取，每只指数间隔 8 秒；巴菲特指标**只发一次全历史请求**。临时网络错误有限次数退避；当能明确识别 401/403/429 限流错误时停止本次更新，不通过伪装身份、换代理或高频重试绕过。**这些措施只能减小负载，不能保证不会被源站限制。**
+
+估值页仅查询 `valuation/indexes.json` 中已成功抓取的中证指数代码。目前示例含 930901（动漫游戏）、931140（医药50）、931454（港股通消费）。输入新代码不会直接联网；要新增支持的指数，先扩清单、核对数据源是否返回“滚动市盈率”，再运行工作流。AKShare 升级可能变更函数名或字段，本项目已经兼容当前 `index_hist_csindex`；接口更改时会明确失败而非虚构数值。
 
 ## 本地运行
+
+在项目根目录安装依赖后按**顺序**运行：
 
 ```bash
 python -m pip install -r requirements.txt
 python eastmoney_margin_5y_mergechatgpt.py --years 5 --output data/融资融券近五年合并分析.xlsx
-python build_site.py --input data/融资融券近五年合并分析.xlsx --output docs/index.html
+python valuation/fetch.py --config valuation/indexes.json --output data/valuation.json
+python buffett/fetch.py --years 10 --output data/buffett.json --csv data/buffett_indicator_data.csv
+python build_site.py --input data/融资融券近五年合并分析.xlsx --output docs/margin.html
+python valuation/build.py --input data/valuation.json --output docs/valuation.html
+python buffett/build.py --input data/buffett.json --output docs/buffett.html
+python build_portal.py --input portal_template.html --output docs/index.html
 python -m unittest discover -s tests -v
 ```
 
-打开 `docs/index.html` 查看页面。原始脚本依旧支持 `--end-date YYYY-MM-DD`、`--years` 和 `--output`。本地生成页面前请先有有效 Excel。构建器把图表数据嵌入 HTML，页面无需后端；但 ECharts 脚本仍需联网。若本地抓取失败，检查东方财富页面及接口变化、网络可达性和 `run.log`；勿把失败时的空页面当作已更新数据。
+本地这些命令不会自动执行工作流的模块间隔；定时/手动 Actions 中的顺序间隔由 `.github/workflows/update.yml` 实施。`run.log` 与 `data/` 不应提交仓库；`docs/` 中的预览包含本地实测数据，首次成功运行后由 Pages 构建产物替换。
 
-## 文件结构
+## 项目结构
 
-- `eastmoney_margin_5y_mergechatgpt.py`：用户提供的原始抓取、合并、计算与 Excel 导出程序，保持原样。
-- `build_site.py`：读取 Excel、校验必要列并注入网页数据；写入 `run.log`。
-- `site_template.html`：响应式页面模板与 ECharts 图表。
-- `.github/workflows/update.yml`：定时或手动执行、上传 Excel/日志、部署 Pages。
-- `tests/`：计算逻辑和网页构建的离线测试。
-- `docs/index.html`：首次成功运行后生成，作为 Pages 部署目录。
-
-## 口径与注意事项
-
-- 原程序按交易日期对两个数据源做一对一外连接；缺值不连接线，最近交易日可能不齐。比例单位为**百分点**，不是 Excel 百分比单元格式。
-- 平均秩百分位采用 `rank(method="average", pct=True) × 100`；不同回溯窗口或后续新数据会改变历史百分位。
-- 东方财富接口并非本项目维护，若接口、字段、限流政策变化，自动更新可能失败。当前项目尚未在 GitHub Actions 环境实跑或验证真实数据可得性；首次部署后以 Actions 运行结果为准。
-- 仅用于数据观察、教学研究，不构成投资建议。
+- `portal_template.html`, `build_portal.py`：首页及链接完整性校验。
+- `site_template.html`, `build_site.py`, `eastmoney_margin_5y_mergechatgpt.py`：两融数据与图表，包含先前的缺失百分位修复。
+- `valuation/indexes.json`, `valuation/fetch.py`, `valuation/template.html`, `valuation/build.py`：白名单指数估值。
+- `buffett/buffett_indicator_china_original.py`, `buffett/fetch.py`, `buffett/template.html`, `buffett/build.py`：原稿备份、低频抓取、百分位计算和看板。
+- `.github/workflows/update.yml`, `requirements.txt`, `tests/`：自动更新、依赖和离线测试。

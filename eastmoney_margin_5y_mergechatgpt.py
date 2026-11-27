@@ -51,7 +51,10 @@ API_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 TOTAL_PAGE_URL = "https://data.eastmoney.com/rzrq/total.html"
 ACCOUNT_PAGE_URL = "https://data.eastmoney.com/rzrq/zhtjday.html"
 PAGE_SIZE = 500
-MAX_RETRIES = 4
+# 低频串行请求：正常页间稍作等待；临时失败仅有限次退避，不绕过限流。
+MAX_RETRIES = 3
+REQUEST_INTERVAL_SECONDS = 3.0
+RETRY_WAIT_SECONDS = (10.0, 25.0)
 
 TOTAL_REPORT = {
     "report_name": "RPTA_RZRQ_LSHJ",
@@ -227,9 +230,11 @@ def get_json(params: dict[str, Any], referer: str) -> dict[str, Any]:
             json.JSONDecodeError,
         ) as exc:
             last_error = exc
+            if isinstance(exc, urllib.error.HTTPError) and exc.code in (401, 403, 429):
+                raise EastmoneyDataError(f"接口拒绝或限流（HTTP {exc.code}）；本次停止，不重复访问。") from exc
             if attempt == MAX_RETRIES:
                 break
-            wait_seconds = 1.5 * (2 ** (attempt - 1))
+            wait_seconds = RETRY_WAIT_SECONDS[attempt - 1]
             print(
                 f"  第 {attempt} 次请求暂时失败：{exc}，"
                 f"{wait_seconds:.1f} 秒后重试……"
@@ -275,6 +280,7 @@ def fetch_report(
     )
 
     for page_number in range(2, pages + 1):
+        time.sleep(REQUEST_INTERVAL_SECONDS)
         params = dict(base_params)
         params["pageNumber"] = page_number
         payload = get_json(params, referer)
@@ -285,7 +291,6 @@ def fetch_report(
             end="",
             flush=True,
         )
-        time.sleep(0.15)
     if pages > 1:
         print()
 
@@ -370,7 +375,15 @@ def percentile_rank(series: pd.Series) -> pd.Series:
     缺失值不参与样本，也保持为空。
     """
     numeric = pd.to_numeric(series, errors="coerce")
-    return numeric.rank(method="average", pct=True, na_option="keep").mul(100)
+    # pandas 的可空 Float64 在部分版本中 rank(pct=True) 会把 <NA> 排成最低名次。
+    # 转成常规 float/NaN，并在排名后再次按原始有效掩码清空。
+    numeric = numeric.astype("float64")
+    # 对部分 pandas 版本显式使用非空子样本排名，避免缺失值计入分母。
+    valid = numeric.dropna()
+    ranked = pd.Series(float("nan"), index=numeric.index, dtype="float64")
+    if not valid.empty:
+        ranked.loc[valid.index] = valid.rank(method="average", pct=True).mul(100)
+    return ranked
 
 
 def prepare_merged_data(
@@ -696,6 +709,15 @@ def validate_result(
     if not account_dates.issubset(merged_dates):
         raise EastmoneyDataError("合并过程中丢失了账户统计页的日期。")
 
+    # 百分位不能在其基础指标缺失的日期单独出现。
+    for base, rank in [
+        ("当日融资买入额占融资余额比例", "当日融资买入额占融资余额比例近五年百分位"),
+        ("当日参与交易投资者占有负债投资者比例", "当日参与交易投资者占有负债投资者比例近五年百分位"),
+        ("平均维持担保比例(%)", "当日平均维持担保比例近五年百分位"),
+    ]:
+        if not merged[base].notna().equals(merged[rank].notna()):
+            raise EastmoneyDataError(f"{rank} 与基础指标 {base} 的缺失日期不一致。")
+
     for column in [
         "当日融资买入额占融资余额比例近五年百分位",
         "当日参与交易投资者占有负债投资者比例近五年百分位",
@@ -774,6 +796,7 @@ def main() -> int:
             end_date=end_date,
             display_name="融资融券交易总量数据",
         )
+        time.sleep(REQUEST_INTERVAL_SECONDS)
         account_raw = fetch_report(
             **ACCOUNT_REPORT,
             start_date=start_date,

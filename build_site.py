@@ -23,6 +23,13 @@ def build(input_path: Path, output_path: Path) -> None:
     missing = set(COLUMNS) - set(frame.columns)
     if missing:
         raise ValueError(f"Excel 缺少字段：{sorted(missing)}")
+    # 构建网页时再核对一次，防止错误的 Excel 绕过抓取阶段校验。
+    for base, rank in [
+        ("当日融资买入额占融资余额比例", "当日融资买入额占融资余额比例近五年百分位"),
+        ("平均维持担保比例(%)", "当日平均维持担保比例近五年百分位"),
+    ]:
+        if not frame[base].notna().equals(frame[rank].notna()):
+            raise ValueError(f"{rank} 与基础指标 {base} 的缺失日期不一致")
     frame["交易日期"] = pd.to_datetime(frame["交易日期"], errors="raise")
     if frame.empty or frame["交易日期"].duplicated().any():
         raise ValueError("数据为空或交易日期重复")
